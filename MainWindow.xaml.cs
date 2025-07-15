@@ -1,5 +1,6 @@
 ﻿using System;
-using System.Linq; // For Where()
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,10 +16,10 @@ namespace InternalChatAppClientWPF
         NetworkStream stream;
         string username;
 
-        // Group handling
         private string selectedGroup = null;
-        private System.Collections.Generic.List<string> groups =
-            new System.Collections.Generic.List<string>();
+        private List<string> groups = new List<string>();
+        private Dictionary<string, List<string>> groupMessages =
+            new Dictionary<string, List<string>>();
 
         public MainWindow()
         {
@@ -30,7 +31,6 @@ namespace InternalChatAppClientWPF
             SendButton.IsEnabled = false;
         }
 
-        // Handle username input placeholder visibility
         private void UsernameTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateUsernamePlaceholder();
@@ -44,7 +44,6 @@ namespace InternalChatAppClientWPF
                 : Visibility.Collapsed;
         }
 
-        // Handle message input placeholder visibility and Send button enabled state
         private void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateMessagePlaceholder();
@@ -62,7 +61,6 @@ namespace InternalChatAppClientWPF
                 : Visibility.Collapsed;
         }
 
-        // Send message on Enter key press
         private async void MessageTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter && SendButton.IsEnabled)
@@ -72,7 +70,6 @@ namespace InternalChatAppClientWPF
             }
         }
 
-        // Connect button click event
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
             username = UsernameTextBox.Text.Trim();
@@ -95,9 +92,8 @@ namespace InternalChatAppClientWPF
                 AppendChatMessage("[System]: Connected to server.");
                 ConnectButton.IsEnabled = false;
                 UsernameTextBox.IsEnabled = false;
-                SendButton.IsEnabled = false; // will enable after group selected
+                SendButton.IsEnabled = true;
 
-                // Start receiving messages
                 ReceiveMessages();
             }
             catch (Exception ex)
@@ -111,39 +107,6 @@ namespace InternalChatAppClientWPF
             }
         }
 
-        // Send button click event
-        private async void SendButton_Click(object sender, RoutedEventArgs e)
-        {
-            await SendMessage();
-        }
-
-        private async Task SendMessage()
-        {
-            if (
-                string.IsNullOrWhiteSpace(MessageTextBox.Text)
-                || stream == null
-                || selectedGroup == null
-            )
-                return;
-
-            string message = $"[{selectedGroup}] {username}: {MessageTextBox.Text.Trim()}";
-
-            // Show your own message immediately
-            AppendChatMessage(message);
-
-            byte[] data = Encoding.UTF8.GetBytes(message);
-            try
-            {
-                await stream.WriteAsync(data, 0, data.Length);
-                MessageTextBox.Clear();
-            }
-            catch (Exception ex)
-            {
-                AppendChatMessage($"[System]: Error sending message: {ex.Message}");
-            }
-        }
-
-        // Async loop to receive messages from server
         private async void ReceiveMessages()
         {
             byte[] buffer = new byte[1024];
@@ -157,19 +120,28 @@ namespace InternalChatAppClientWPF
                         AppendChatMessage("[System]: Disconnected from server.");
                         break;
                     }
+
                     string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
 
                     if (message.StartsWith("GROUPS:"))
                     {
-                        // Split by ',' and filter out empty entries manually
-                        string[] rawGroups = message.Substring(7).Split(new char[] { ',' });
+                        string[] rawGroups = message
+                            .Substring(7)
+                            .Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
                         var groupList = rawGroups
-                            .Where(g => !string.IsNullOrWhiteSpace(g))
                             .Select(g => g.Trim())
+                            .Where(g => !string.IsNullOrWhiteSpace(g))
                             .ToArray();
 
-                        foreach (var g in groupList)
-                            Dispatcher.Invoke(() => AddGroup(g));
+                        Dispatcher.Invoke(() =>
+                        {
+                            groups.Clear();
+                            GroupsPanel.Children.Clear();
+                            foreach (var g in groupList)
+                            {
+                                AddGroup(g);
+                            }
+                        });
                     }
                     else
                     {
@@ -187,13 +159,68 @@ namespace InternalChatAppClientWPF
             }
         }
 
+        private async Task SendMessage()
+        {
+            if (selectedGroup == null)
+            {
+                MessageBox.Show(
+                    "Please select a group before sending a message.",
+                    "Group Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(MessageTextBox.Text) || stream == null)
+                return;
+
+            string message = $"[{selectedGroup}] {username}: {MessageTextBox.Text.Trim()}";
+
+            AppendChatMessage(message);
+
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            try
+            {
+                await stream.WriteAsync(data, 0, data.Length);
+                MessageTextBox.Clear();
+            }
+            catch (Exception ex)
+            {
+                AppendChatMessage($"[System]: Error sending message: {ex.Message}");
+            }
+        }
+
         private void AppendChatMessage(string message)
         {
             Dispatcher.Invoke(() =>
             {
-                ChatListBox.Items.Add(message);
-                ChatListBox.ScrollIntoView(ChatListBox.Items[ChatListBox.Items.Count - 1]);
+                string group = ExtractGroupName(message);
+                if (group == null)
+                    return;
+
+                if (!groupMessages.ContainsKey(group))
+                    groupMessages[group] = new List<string>();
+
+                groupMessages[group].Add(message);
+
+                if (group == selectedGroup)
+                {
+                    ChatListBox.Items.Add(message);
+                    ChatListBox.ScrollIntoView(ChatListBox.Items[ChatListBox.Items.Count - 1]);
+                }
             });
+        }
+
+        private string ExtractGroupName(string message)
+        {
+            if (message.StartsWith("[") && message.Contains("]"))
+            {
+                int endIndex = message.IndexOf(']');
+                if (endIndex > 1)
+                    return message.Substring(1, endIndex - 1);
+            }
+            return null;
         }
 
         private void Disconnect()
@@ -211,29 +238,25 @@ namespace InternalChatAppClientWPF
                 client.Close();
         }
 
-        // GROUP UI handling
-
         private void AddGroup(string groupName)
         {
             if (groups.Contains(groupName))
                 return;
-            groups.Add(groupName);
 
+            groups.Add(groupName);
             string initials = GetGroupInitials(groupName);
 
-            Button btn = new Button();
-            btn.Content = initials;
-            btn.Style = (Style)FindResource("GroupCircleButtonStyle");
-            btn.Tag = groupName;
-            btn.Margin = new Thickness(5, 0, 5, 0);
-            btn.Click += GroupButton_Click;
-
-            GroupsPanel.Children.Add(btn);
-
-            if (selectedGroup == null)
+            Button btn = new Button
             {
-                SelectGroup(groupName);
-            }
+                Content = initials,
+                Style = (Style)FindResource("GroupCircleButtonStyle"),
+                Tag = groupName,
+                Margin = new Thickness(5, 0, 5, 0),
+                ToolTip = groupName,
+            };
+
+            btn.Click += GroupButton_Click;
+            GroupsPanel.Children.Add(btn);
         }
 
         private string GetGroupInitials(string groupName)
@@ -249,21 +272,12 @@ namespace InternalChatAppClientWPF
                     : parts[0].Substring(0, 2).ToUpper();
             }
 
-            string initials = "";
-            foreach (string part in parts)
-            {
-                if (initials.Length < 2)
-                    initials += part[0];
-                else
-                    break;
-            }
-            return initials.ToUpper();
+            return new string(parts.Take(2).Select(p => p[0]).ToArray()).ToUpper();
         }
 
         private void GroupButton_Click(object sender, RoutedEventArgs e)
         {
-            Button btn = sender as Button;
-            if (btn != null && btn.Tag is string groupName)
+            if (sender is Button btn && btn.Tag is string groupName)
             {
                 SelectGroup(groupName);
             }
@@ -275,21 +289,35 @@ namespace InternalChatAppClientWPF
 
             foreach (Button btn in GroupsPanel.Children)
             {
-                if ((string)btn.Tag == groupName)
-                    btn.Background = (System.Windows.Media.Brush)(
-                        new System.Windows.Media.BrushConverter().ConvertFrom("#3A5AD9")
-                    ); // darker blue
-                else
-                    btn.Background = (System.Windows.Media.Brush)(
-                        new System.Windows.Media.BrushConverter().ConvertFrom("#4E7FFF")
-                    ); // default blue
+                btn.Background = (System.Windows.Media.Brush)(
+                    new System.Windows.Media.BrushConverter().ConvertFrom(
+                        (string)btn.Tag == groupName ? "#3A5AD9" : "#4E7FFF"
+                    )
+                );
             }
 
-            // Clear chat messages when switching groups
-            Dispatcher.Invoke(() => ChatListBox.Items.Clear());
+            ChatListBox.Items.Clear();
 
-            // Enable send button only if message box has text
-            SendButton.IsEnabled = !string.IsNullOrWhiteSpace(MessageTextBox.Text);
+            if (groupMessages.TryGetValue(groupName, out List<string> messages))
+            {
+                foreach (string msg in messages)
+                {
+                    ChatListBox.Items.Add(msg);
+                }
+
+                if (messages.Count > 0)
+                    ChatListBox.ScrollIntoView(ChatListBox.Items[ChatListBox.Items.Count - 1]);
+            }
+
+            SendButton.IsEnabled =
+                !string.IsNullOrWhiteSpace(MessageTextBox.Text)
+                && client != null
+                && client.Connected;
+        }
+
+        private async void SendButton_Click(object sender, RoutedEventArgs e)
+        {
+            await SendMessage();
         }
     }
 }
