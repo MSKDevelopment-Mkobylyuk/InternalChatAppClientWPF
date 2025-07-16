@@ -1,7 +1,7 @@
 ﻿<Window x:Class="InternalChatAppClientWPF.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Internal Chat App" Height="450" Width="400"
+        Title="Internal Chat App" Height="450" Width="425"
         Background="#121324" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
 
     <Window.Resources>
@@ -68,30 +68,50 @@
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <!-- Groups circles -->
+            <!-- Groups Header -->
             <RowDefinition Height="Auto"/>
-            <!-- Username input -->
+            <!-- Groups Panel -->
+            <RowDefinition Height="Auto"/>
+            <!-- Username Input -->
             <RowDefinition Height="*"/>
-            <!-- Chat display -->
+            <!-- Chat Display -->
             <RowDefinition Height="Auto"/>
-            <!-- Message input -->
+            <!-- Message Input -->
         </Grid.RowDefinitions>
 
+        <!-- Groups Header with Label and Gear Icon -->
+        <Grid Grid.Row="0" Margin="0 0 0 5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Groups" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+            <Button Grid.Column="1"
+                    Content="⚙"
+                    Width="24" Height="24"
+                    Style="{StaticResource ClickDarkenButtonStyle}"
+                    Click="SettingsButton_Click"/>
+        </Grid>
+
         <!-- Groups Circles Panel -->
-        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Height="50" Margin="0 0 0 10">
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Height="50" Margin="0 0 0 10">
             <StackPanel x:Name="GroupsPanel" Orientation="Horizontal" VerticalAlignment="Center" />
         </ScrollViewer>
 
         <!-- Username Input -->
-        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0 0 0 15" VerticalAlignment="Center">
-            <Grid Width="250" Height="30" Margin="0 0 10 0">
-                <!-- Placeholder Text -->
+        <Grid Grid.Row="2" Margin="0 0 0 15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="100"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Height="30">
                 <TextBlock x:Name="UsernamePlaceholder" Text="Enter your name..." 
                            Foreground="#888" Padding="8,4"
                            IsHitTestVisible="False"
                            VerticalAlignment="Center"
-                           FontSize="14"/>
-                <!-- Actual Input -->
+                           FontSize="14"
+                           Visibility="Visible"/>
                 <TextBox x:Name="UsernameTextBox"
                          Background="#2A2A3D"
                          Foreground="#EEE"
@@ -101,37 +121,38 @@
                          VerticalContentAlignment="Center"
                          TextChanged="UsernameTextBox_TextChanged"/>
             </Grid>
-            <Button x:Name="ConnectButton"
+
+            <Button Grid.Column="1"
+                    x:Name="ConnectButton"
                     Content="Connect"
-                    Width="90"
+                    Margin="10,0,0,0"
                     Height="30"
                     Style="{StaticResource ClickDarkenButtonStyle}"
                     Click="ConnectButton_Click"/>
-        </StackPanel>
+        </Grid>
 
         <!-- Chat Display -->
-        <ListBox x:Name="ChatListBox" Grid.Row="2" 
+        <ListBox x:Name="ChatListBox" Grid.Row="3" 
                  Background="#1E1E3F" Foreground="White" 
                  BorderThickness="0"
                  FontSize="14"
                  Padding="10"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 />
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"/>
 
         <!-- Message Input -->
-        <Grid Grid.Row="3" Margin="0 15 0 0">
+        <Grid Grid.Row="4" Margin="0 15 0 0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="100"/>
             </Grid.ColumnDefinitions>
 
-            <Grid>
-                <!-- Placeholder Text -->
+            <Grid Grid.Column="0" Height="30">
                 <TextBlock x:Name="MessagePlaceholder" Text="Type a message..."
                            Foreground="#888" Padding="8,4"
                            IsHitTestVisible="False"
                            VerticalAlignment="Center"
-                           FontSize="14"/>
+                           FontSize="14"
+                           Visibility="Visible"/>
                 <TextBox x:Name="MessageTextBox"
                          Background="#2A2A3D"
                          Foreground="White"
@@ -146,6 +167,7 @@
             <Button x:Name="SendButton" Grid.Column="1"
                     Content="Send"
                     Margin="10,0,0,0"
+                    Height="30"
                     Style="{StaticResource ClickDarkenButtonStyle}"
                     IsEnabled="False"
                     Click="SendButton_Click"/>

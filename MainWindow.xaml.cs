@@ -12,14 +12,35 @@ namespace InternalChatAppClientWPF
 {
     public partial class MainWindow : Window
     {
-        TcpClient client;
-        NetworkStream stream;
-        string username;
+        TcpClient client; // TCP client used to connect to the chat server
+        NetworkStream stream; // Stream for sending/receiving data
+        string username; // Stores the current user's name
 
-        private string selectedGroup = null;
-        private List<string> groups = new List<string>();
+        private string selectedGroup = null; // Currently selected chat group
+        private List<string> groups = new List<string>(); // List of available groups
         private Dictionary<string, List<string>> groupMessages =
-            new Dictionary<string, List<string>>();
+            new Dictionary<string, List<string>>(); // Messages grouped by group name
+
+        private string serverIp
+        {
+            get => Properties.Settings.Default.ServerIp;
+            set
+            {
+                Properties.Settings.Default.ServerIp = value;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private int serverPort
+        {
+            get => Properties.Settings.Default.ServerPort;
+            set
+            {
+                Properties.Settings.Default.ServerPort = value;
+                Properties.Settings.Default.Save();
+            }
+        }
+
 
         public MainWindow()
         {
@@ -27,16 +48,19 @@ namespace InternalChatAppClientWPF
             UpdateUsernamePlaceholder();
             UpdateMessagePlaceholder();
 
+            // Disable buttons initially
             ConnectButton.IsEnabled = false;
             SendButton.IsEnabled = false;
         }
 
+        // Updates the Connect button and placeholder visibility when username text changes
         private void UsernameTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateUsernamePlaceholder();
             ConnectButton.IsEnabled = !string.IsNullOrWhiteSpace(UsernameTextBox.Text);
         }
 
+        // Shows/hides the placeholder inside the username textbox
         private void UpdateUsernamePlaceholder()
         {
             UsernamePlaceholder.Visibility = string.IsNullOrEmpty(UsernameTextBox.Text)
@@ -44,6 +68,7 @@ namespace InternalChatAppClientWPF
                 : Visibility.Collapsed;
         }
 
+        // Updates the Send button and message placeholder when message input changes
         private void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateMessagePlaceholder();
@@ -54,6 +79,7 @@ namespace InternalChatAppClientWPF
                 && selectedGroup != null;
         }
 
+        // Shows/hides the placeholder inside the message textbox
         private void UpdateMessagePlaceholder()
         {
             MessagePlaceholder.Visibility = string.IsNullOrEmpty(MessageTextBox.Text)
@@ -61,6 +87,7 @@ namespace InternalChatAppClientWPF
                 : Visibility.Collapsed;
         }
 
+        // Sends message on Enter key press if input is valid
         private async void MessageTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter && SendButton.IsEnabled)
@@ -70,6 +97,7 @@ namespace InternalChatAppClientWPF
             }
         }
 
+        // Connects to the chat server on button click
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
             username = UsernameTextBox.Text.Trim();
@@ -86,10 +114,14 @@ namespace InternalChatAppClientWPF
 
             try
             {
+                string ip = Properties.Settings.Default.ServerIp;
+                int port = Properties.Settings.Default.ServerPort;
+
                 client = new TcpClient();
-                await client.ConnectAsync("127.0.0.1", 5000);
+                await client.ConnectAsync(ip, port); // Connect using settings
                 stream = client.GetStream();
                 AppendChatMessage("[System]: Connected to server.");
+
                 ConnectButton.IsEnabled = false;
                 UsernameTextBox.IsEnabled = false;
                 SendButton.IsEnabled = true;
@@ -107,9 +139,11 @@ namespace InternalChatAppClientWPF
             }
         }
 
+        // Listens for messages from the server
         private async void ReceiveMessages()
         {
             byte[] buffer = new byte[1024];
+
             try
             {
                 while (true)
@@ -125,6 +159,7 @@ namespace InternalChatAppClientWPF
 
                     if (message.StartsWith("GROUPS:"))
                     {
+                        // Update group list if the server sends group info
                         string[] rawGroups = message
                             .Substring(7)
                             .Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
@@ -159,6 +194,7 @@ namespace InternalChatAppClientWPF
             }
         }
 
+        // Sends a chat message to the server
         private async Task SendMessage()
         {
             if (selectedGroup == null)
@@ -176,8 +212,7 @@ namespace InternalChatAppClientWPF
                 return;
 
             string message = $"[{selectedGroup}] {username}: {MessageTextBox.Text.Trim()}";
-
-            AppendChatMessage(message);
+            AppendChatMessage(message); // Show message locally
 
             byte[] data = Encoding.UTF8.GetBytes(message);
             try
@@ -191,6 +226,7 @@ namespace InternalChatAppClientWPF
             }
         }
 
+        // Displays a message in the chat list for the current group
         private void AppendChatMessage(string message)
         {
             Dispatcher.Invoke(() =>
@@ -212,6 +248,7 @@ namespace InternalChatAppClientWPF
             });
         }
 
+        // Extracts group name from message format: "[GroupName] User: Message"
         private string ExtractGroupName(string message)
         {
             if (message.StartsWith("[") && message.Contains("]"))
@@ -223,6 +260,7 @@ namespace InternalChatAppClientWPF
             return null;
         }
 
+        // Disconnects from the server and resets UI
         private void Disconnect()
         {
             Dispatcher.Invoke(() =>
@@ -238,6 +276,7 @@ namespace InternalChatAppClientWPF
                 client.Close();
         }
 
+        // Adds a group button to the UI
         private void AddGroup(string groupName)
         {
             if (groups.Contains(groupName))
@@ -259,6 +298,7 @@ namespace InternalChatAppClientWPF
             GroupsPanel.Children.Add(btn);
         }
 
+        // Generates initials from group name (e.g., "Dev Team" => "DT")
         private string GetGroupInitials(string groupName)
         {
             string[] parts = groupName.Split(
@@ -275,6 +315,7 @@ namespace InternalChatAppClientWPF
             return new string(parts.Take(2).Select(p => p[0]).ToArray()).ToUpper();
         }
 
+        // Handles group button click event
         private void GroupButton_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.Tag is string groupName)
@@ -283,6 +324,7 @@ namespace InternalChatAppClientWPF
             }
         }
 
+        // Sets the current active group and displays messages for that group
         private void SelectGroup(string groupName)
         {
             selectedGroup = groupName;
@@ -315,9 +357,28 @@ namespace InternalChatAppClientWPF
                 && client.Connected;
         }
 
+        // Handles Send button click
         private async void SendButton_Click(object sender, RoutedEventArgs e)
         {
             await SendMessage();
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var settingsWindow = new SettingsWindow(serverIp, serverPort)
+            {
+                Owner = this
+            };
+
+            bool? result = settingsWindow.ShowDialog();
+
+            if (result == true)
+            {
+                serverIp = settingsWindow.IpAddress;
+                serverPort = settingsWindow.Port;
+
+                MessageBox.Show($"Settings updated:\nIP Address: {serverIp}\nPort: {serverPort}", "Settings Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
     }
 }
